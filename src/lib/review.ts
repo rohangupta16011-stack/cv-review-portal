@@ -40,7 +40,7 @@ For each category, assign a score and a label:
 
 Be honest but constructive. Suggestions must be specific and actionable — quote the actual CV text where helpful. Avoid generic advice like "use action verbs"; instead say *which* bullet to rewrite and *how*.
 
-The "headline" is a single sentence (max 12 words) that captures the CV's core impression. The "top_three_fixes" are the three highest-leverage changes the candidate should make first.
+The "headline" is a single sentence (max 12 words) that captures the CV's core impression. The "top_three_fixes" array MUST contain exactly 3 strings — the three highest-leverage changes the candidate should make first. Each category's "suggestions" array MUST contain between 2 and 5 specific, actionable suggestions. All scores MUST be integers between 0 and 100.
 
 Return ONLY valid JSON matching the schema. No markdown, no preamble.`;
 
@@ -65,8 +65,6 @@ const REVIEW_SCHEMA = {
     top_three_fixes: {
       type: "array",
       items: { type: "string" },
-      minItems: 3,
-      maxItems: 3,
     },
   },
   required: [
@@ -89,8 +87,6 @@ function categorySchema() {
       suggestions: {
         type: "array",
         items: { type: "string" },
-        minItems: 2,
-        maxItems: 5,
       },
     },
     required: ["score", "label", "summary", "suggestions"],
