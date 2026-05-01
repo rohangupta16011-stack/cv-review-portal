@@ -47,7 +47,7 @@ Return ONLY valid JSON matching the schema. No markdown, no preamble.`;
 const REVIEW_SCHEMA = {
   type: "object",
   properties: {
-    overall_score: { type: "integer", minimum: 0, maximum: 100 },
+    overall_score: { type: "integer" },
     overall_summary: { type: "string" },
     headline: { type: "string" },
     categories: {
@@ -83,7 +83,7 @@ function categorySchema() {
   return {
     type: "object",
     properties: {
-      score: { type: "integer", minimum: 0, maximum: 100 },
+      score: { type: "integer" },
       label: { type: "string", enum: ["needs-work", "decent", "strong"] },
       summary: { type: "string" },
       suggestions: {
