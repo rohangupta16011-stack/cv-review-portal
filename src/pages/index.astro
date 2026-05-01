@@ -6,10 +6,6 @@ import Layout from "../layouts/Layout.astro";
   <main class="mx-auto max-w-5xl px-6 py-12 md:py-20">
     <!-- Hero -->
     <section class="text-center mb-16">
-      <div class="inline-flex items-center gap-2 rounded-full border border-teal-600/20 bg-teal-50 px-3 py-1 text-xs font-medium text-teal-700 mb-6">
-        <span class="h-1.5 w-1.5 rounded-full bg-teal-600"></span>
-        Powered by Claude
-      </div>
       <h1 class="text-4xl md:text-6xl font-display font-semibold text-ink leading-tight mb-5">
         Get a CV review<br/>
         <span class="text-teal-600">in 30 seconds.</span>
@@ -17,6 +13,9 @@ import Layout from "../layouts/Layout.astro";
       <p class="text-lg text-ink/70 max-w-2xl mx-auto">
         Upload your CV and get a detailed score across content, impact, style,
         ATS compatibility, and skills — with specific, actionable fixes.
+      </p>
+      <p class="mt-4 text-sm text-ink/60">
+        ₹99 per review · Pay securely via Razorpay
       </p>
     </section>
 
@@ -41,7 +40,7 @@ import Layout from "../layouts/Layout.astro";
         <div class="flex items-center justify-between gap-4">
           <p id="file-name" class="text-sm text-ink/60 truncate"></p>
           <button id="submit-btn" type="submit" class="btn-primary" disabled>
-            <span id="btn-label">Review my CV</span>
+            <span id="btn-label">Pay ₹99 & review</span>
             <svg id="btn-spinner" class="hidden h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
               <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" class="opacity-25"></circle>
               <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"></path>
@@ -186,21 +185,31 @@ import Layout from "../layouts/Layout.astro";
     }
   });
 
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    clearError();
-    const file = fileInput.files?.[0];
-    if (!file) return;
+  type RazorpaySuccess = {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  };
 
+  function setBusy(label: string) {
     submitBtn.disabled = true;
-    btnLabel.textContent = "Reviewing…";
+    btnLabel.textContent = label;
     btnSpinner.classList.remove("hidden");
+  }
+  function clearBusy() {
+    submitBtn.disabled = false;
+    btnLabel.textContent = "Pay ₹99 & review";
+    btnSpinner.classList.add("hidden");
+  }
+
+  async function runReview(file: File, payment: RazorpaySuccess) {
     loadingEl.classList.remove("hidden");
     resultsEl.classList.add("hidden");
-
     const fd = new FormData();
     fd.append("cv", file);
-
+    fd.append("razorpay_order_id", payment.razorpay_order_id);
+    fd.append("razorpay_payment_id", payment.razorpay_payment_id);
+    fd.append("razorpay_signature", payment.razorpay_signature);
     try {
       const res = await fetch("/api/review", { method: "POST", body: fd });
       const data = await res.json();
@@ -210,10 +219,61 @@ import Layout from "../layouts/Layout.astro";
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       loadingEl.classList.add("hidden");
-      submitBtn.disabled = false;
-      btnLabel.textContent = "Review my CV";
-      btnSpinner.classList.add("hidden");
+      clearBusy();
     }
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    clearError();
+    const file = fileInput.files?.[0];
+    if (!file) return;
+
+    setBusy("Starting payment…");
+
+    let order: { orderId: string; amount: number; currency: string; keyId: string };
+    try {
+      const res = await fetch("/api/order", { method: "POST" });
+      order = await res.json();
+      if (!res.ok) throw new Error((order as any).error || "Could not start payment.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not start payment.");
+      clearBusy();
+      return;
+    }
+
+    const RazorpayCtor = (window as any).Razorpay;
+    if (!RazorpayCtor) {
+      setError("Payment SDK failed to load. Refresh and try again.");
+      clearBusy();
+      return;
+    }
+
+    const rzp = new RazorpayCtor({
+      key: order.keyId,
+      amount: order.amount,
+      currency: order.currency,
+      order_id: order.orderId,
+      name: "CV Review",
+      description: "AI-powered CV review",
+      handler: (response: RazorpaySuccess) => {
+        setBusy("Reviewing…");
+        runReview(file, response);
+      },
+      modal: {
+        ondismiss: () => {
+          clearBusy();
+        },
+      },
+      theme: { color: "#0D9488" },
+    });
+
+    rzp.on("payment.failed", (resp: any) => {
+      setError(resp?.error?.description || "Payment failed. Please try again.");
+      clearBusy();
+    });
+
+    rzp.open();
   });
 
   restart.addEventListener("click", () => {
@@ -222,6 +282,8 @@ import Layout from "../layouts/Layout.astro";
     fileName.textContent = "";
     dropzoneTitle.textContent = "Drop your CV here, or click to choose";
     submitBtn.disabled = true;
+    btnLabel.textContent = "Pay ₹99 & review";
+    btnSpinner.classList.add("hidden");
     window.scrollTo({ top: 0, behavior: "smooth" });
   });
 

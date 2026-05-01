@@ -10,12 +10,14 @@
     "astro": "astro"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.40.0",
-    "@astrojs/node": "^9.1.0",
+    "@anthropic-ai/sdk": "^0.92.0",
     "@astrojs/tailwind": "^6.0.0",
+    "@astrojs/vercel": "^9.0.5",
+    "@upstash/redis": "^1.37.0",
     "astro": "^5.1.0",
     "mammoth": "^1.9.0",
     "pdf-parse": "^1.1.1",
+    "razorpay": "^2.9.6",
     "tailwindcss": "^3.4.17"
   },
   "devDependencies": {
