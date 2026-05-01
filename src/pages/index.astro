@@ -1,0 +1,303 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout title="CV Review Portal — Get an AI-powered review in seconds">
+  <main class="mx-auto max-w-5xl px-6 py-12 md:py-20">
+    <!-- Hero -->
+    <section class="text-center mb-16">
+      <div class="inline-flex items-center gap-2 rounded-full border border-teal-600/20 bg-teal-50 px-3 py-1 text-xs font-medium text-teal-700 mb-6">
+        <span class="h-1.5 w-1.5 rounded-full bg-teal-600"></span>
+        Powered by Claude
+      </div>
+      <h1 class="text-4xl md:text-6xl font-display font-semibold text-ink leading-tight mb-5">
+        Get a CV review<br/>
+        <span class="text-teal-600">in 30 seconds.</span>
+      </h1>
+      <p class="text-lg text-ink/70 max-w-2xl mx-auto">
+        Upload your CV and get a detailed score across content, impact, style,
+        ATS compatibility, and skills — with specific, actionable fixes.
+      </p>
+    </section>
+
+    <!-- Upload -->
+    <section id="uploader" class="card p-8 md:p-12">
+      <form id="cv-form" class="space-y-6">
+        <label
+          for="cv-file"
+          id="dropzone"
+          class="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-ink/15 bg-cream-50 px-6 py-14 text-center cursor-pointer transition hover:border-teal-600/40 hover:bg-teal-50/30"
+        >
+          <svg class="h-10 w-10 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z" />
+          </svg>
+          <div>
+            <span class="font-medium text-ink" id="dropzone-title">Drop your CV here, or click to choose</span>
+            <p class="text-sm text-ink/60 mt-1">PDF or DOCX, up to 10MB</p>
+          </div>
+          <input id="cv-file" name="cv" type="file" accept=".pdf,.docx" class="sr-only" required />
+        </label>
+
+        <div class="flex items-center justify-between gap-4">
+          <p id="file-name" class="text-sm text-ink/60 truncate"></p>
+          <button id="submit-btn" type="submit" class="btn-primary" disabled>
+            <span id="btn-label">Review my CV</span>
+            <svg id="btn-spinner" class="hidden h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" class="opacity-25"></circle>
+              <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"></path>
+            </svg>
+          </button>
+        </div>
+
+        <p id="error" class="hidden text-sm text-coral-500 bg-coral-50 border border-coral-400/20 rounded-lg px-4 py-3"></p>
+      </form>
+    </section>
+
+    <!-- Loading state -->
+    <section id="loading" class="hidden mt-10 card p-10 text-center">
+      <div class="inline-flex items-center gap-3 text-ink/70">
+        <svg class="h-5 w-5 animate-spin text-teal-600" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" class="opacity-25"></circle>
+          <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"></path>
+        </svg>
+        <span>Reading your CV and generating feedback…</span>
+      </div>
+      <p class="mt-2 text-xs text-ink/50">This usually takes 20–40 seconds.</p>
+    </section>
+
+    <!-- Results -->
+    <section id="results" class="hidden mt-10 space-y-6">
+      <!-- Overall card -->
+      <div class="card p-8">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+          <div>
+            <p class="text-xs uppercase tracking-wider text-ink/50 mb-2">Overall</p>
+            <p id="headline" class="font-display text-2xl md:text-3xl text-ink font-semibold mb-3"></p>
+            <p id="overall-summary" class="text-ink/70"></p>
+          </div>
+          <div class="flex-shrink-0 text-center">
+            <div id="overall-score-ring" class="relative h-32 w-32 mx-auto">
+              <svg viewBox="0 0 120 120" class="h-32 w-32 -rotate-90">
+                <circle cx="60" cy="60" r="52" stroke="#FAF5EC" stroke-width="10" fill="none"></circle>
+                <circle id="score-arc" cx="60" cy="60" r="52" stroke="#0D9488" stroke-width="10" fill="none" stroke-linecap="round" stroke-dasharray="326.7" stroke-dashoffset="326.7"></circle>
+              </svg>
+              <div class="absolute inset-0 flex flex-col items-center justify-center">
+                <span id="overall-score" class="font-display text-4xl font-semibold text-ink">--</span>
+                <span class="text-xs text-ink/50">/ 100</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top fixes -->
+      <div class="card p-8">
+        <h2 class="font-display text-xl font-semibold text-ink mb-4">Top 3 fixes</h2>
+        <ol id="top-fixes" class="space-y-3"></ol>
+      </div>
+
+      <!-- Categories -->
+      <div class="grid md:grid-cols-2 gap-6" id="categories"></div>
+
+      <div class="text-center pt-4">
+        <button id="restart" class="btn-ghost">Review another CV</button>
+      </div>
+    </section>
+  </main>
+</Layout>
+
+<script>
+  const form = document.getElementById("cv-form") as HTMLFormElement;
+  const fileInput = document.getElementById("cv-file") as HTMLInputElement;
+  const fileName = document.getElementById("file-name") as HTMLParagraphElement;
+  const submitBtn = document.getElementById("submit-btn") as HTMLButtonElement;
+  const btnLabel = document.getElementById("btn-label") as HTMLSpanElement;
+  const btnSpinner = document.getElementById("btn-spinner") as SVGElement;
+  const errorEl = document.getElementById("error") as HTMLParagraphElement;
+  const loadingEl = document.getElementById("loading") as HTMLElement;
+  const resultsEl = document.getElementById("results") as HTMLElement;
+  const dropzone = document.getElementById("dropzone") as HTMLLabelElement;
+  const dropzoneTitle = document.getElementById("dropzone-title") as HTMLSpanElement;
+  const restart = document.getElementById("restart") as HTMLButtonElement;
+
+  type CategoryScore = {
+    score: number;
+    label: "needs-work" | "decent" | "strong";
+    summary: string;
+    suggestions: string[];
+  };
+
+  type Review = {
+    overall_score: number;
+    overall_summary: string;
+    headline: string;
+    categories: Record<string, CategoryScore>;
+    top_three_fixes: string[];
+  };
+
+  const CATEGORY_LABELS: Record<string, string> = {
+    content: "Content",
+    impact: "Impact",
+    style: "Style",
+    ats: "ATS Compatibility",
+    skills: "Skills",
+  };
+
+  const LABEL_STYLES: Record<string, string> = {
+    "needs-work": "bg-coral-50 text-coral-500 border-coral-400/20",
+    decent: "bg-amber-50 text-amber-700 border-amber-300/30",
+    strong: "bg-teal-50 text-teal-700 border-teal-600/20",
+  };
+
+  function setError(msg: string) {
+    errorEl.textContent = msg;
+    errorEl.classList.remove("hidden");
+  }
+  function clearError() {
+    errorEl.classList.add("hidden");
+  }
+
+  fileInput.addEventListener("change", () => {
+    const f = fileInput.files?.[0];
+    if (f) {
+      fileName.textContent = f.name;
+      submitBtn.disabled = false;
+      dropzoneTitle.textContent = f.name;
+      clearError();
+    }
+  });
+
+  dropzone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    dropzone.classList.add("border-teal-600/60", "bg-teal-50/50");
+  });
+  dropzone.addEventListener("dragleave", () => {
+    dropzone.classList.remove("border-teal-600/60", "bg-teal-50/50");
+  });
+  dropzone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropzone.classList.remove("border-teal-600/60", "bg-teal-50/50");
+    const f = e.dataTransfer?.files?.[0];
+    if (f) {
+      const dt = new DataTransfer();
+      dt.items.add(f);
+      fileInput.files = dt.files;
+      fileInput.dispatchEvent(new Event("change"));
+    }
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    clearError();
+    const file = fileInput.files?.[0];
+    if (!file) return;
+
+    submitBtn.disabled = true;
+    btnLabel.textContent = "Reviewing…";
+    btnSpinner.classList.remove("hidden");
+    loadingEl.classList.remove("hidden");
+    resultsEl.classList.add("hidden");
+
+    const fd = new FormData();
+    fd.append("cv", file);
+
+    try {
+      const res = await fetch("/api/review", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Review failed.");
+      renderReview(data.review as Review);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      loadingEl.classList.add("hidden");
+      submitBtn.disabled = false;
+      btnLabel.textContent = "Review my CV";
+      btnSpinner.classList.add("hidden");
+    }
+  });
+
+  restart.addEventListener("click", () => {
+    resultsEl.classList.add("hidden");
+    fileInput.value = "";
+    fileName.textContent = "";
+    dropzoneTitle.textContent = "Drop your CV here, or click to choose";
+    submitBtn.disabled = true;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+
+  function renderReview(review: Review) {
+    (document.getElementById("headline") as HTMLElement).textContent = review.headline;
+    (document.getElementById("overall-summary") as HTMLElement).textContent = review.overall_summary;
+    (document.getElementById("overall-score") as HTMLElement).textContent = String(review.overall_score);
+
+    const arc = document.getElementById("score-arc") as SVGCircleElement;
+    const circumference = 2 * Math.PI * 52;
+    arc.setAttribute("stroke-dasharray", String(circumference));
+    arc.setAttribute("stroke-dashoffset", String(circumference * (1 - review.overall_score / 100)));
+    arc.setAttribute("stroke", scoreColor(review.overall_score));
+
+    const fixesEl = document.getElementById("top-fixes") as HTMLElement;
+    fixesEl.innerHTML = review.top_three_fixes
+      .map(
+        (fix, i) => `
+          <li class="flex gap-3">
+            <span class="flex-shrink-0 inline-flex h-6 w-6 items-center justify-center rounded-full bg-coral-50 text-coral-500 text-xs font-semibold">${i + 1}</span>
+            <span class="text-ink/80">${escapeHtml(fix)}</span>
+          </li>`,
+      )
+      .join("");
+
+    const catsEl = document.getElementById("categories") as HTMLElement;
+    catsEl.innerHTML = Object.entries(review.categories)
+      .map(([key, cat]) => renderCategory(key, cat))
+      .join("");
+
+    resultsEl.classList.remove("hidden");
+    resultsEl.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function renderCategory(key: string, cat: CategoryScore): string {
+    const title = CATEGORY_LABELS[key] ?? key;
+    const labelClass = LABEL_STYLES[cat.label] ?? "";
+    const labelText = cat.label.replace("-", " ");
+    return `
+      <div class="card p-6">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-display text-lg font-semibold text-ink">${title}</h3>
+          <span class="text-xs font-medium px-2.5 py-1 rounded-full border ${labelClass}">${labelText}</span>
+        </div>
+        <div class="flex items-baseline gap-2 mb-3">
+          <span class="font-display text-3xl font-semibold text-ink">${cat.score}</span>
+          <span class="text-sm text-ink/40">/ 100</span>
+        </div>
+        <div class="score-bar mb-4">
+          <div class="score-bar-fill" style="width: ${cat.score}%; background: ${scoreColor(cat.score)};"></div>
+        </div>
+        <p class="text-sm text-ink/70 mb-4">${escapeHtml(cat.summary)}</p>
+        <p class="text-xs uppercase tracking-wider text-ink/40 mb-2">Suggestions</p>
+        <ul class="space-y-2">
+          ${cat.suggestions
+            .map(
+              (s) =>
+                `<li class="flex gap-2 text-sm text-ink/80"><span class="text-teal-600 flex-shrink-0">→</span><span>${escapeHtml(s)}</span></li>`,
+            )
+            .join("")}
+        </ul>
+      </div>`;
+  }
+
+  function scoreColor(score: number): string {
+    if (score >= 80) return "#0D9488";
+    if (score >= 60) return "#D97706";
+    return "#FB7185";
+  }
+
+  function escapeHtml(s: string): string {
+    return s
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+</script>
