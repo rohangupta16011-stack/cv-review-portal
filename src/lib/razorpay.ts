@@ -22,6 +22,7 @@ export function verifySignature(
   signature: string,
 ): boolean {
   if (!keySecret) return false;
+  if (!/^[a-f0-9]{64}$/i.test(signature)) return false;
   const expected = crypto
     .createHmac("sha256", keySecret)
     .update(`${orderId}|${paymentId}`)

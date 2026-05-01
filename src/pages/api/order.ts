@@ -17,8 +17,8 @@ export const POST: APIRoute = async () => {
       keyId: import.meta.env.PUBLIC_RAZORPAY_KEY_ID,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unable to create order";
-    return json({ error: message }, 500);
+    console.error("[api/order]", err);
+    return json({ error: "Could not start payment. Please try again." }, 500);
   }
 };
 

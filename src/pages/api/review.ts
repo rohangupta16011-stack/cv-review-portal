@@ -54,8 +54,8 @@ export const POST: APIRoute = async ({ request }) => {
       review,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unexpected error";
-    return json({ error: message }, 500);
+    console.error("[api/review]", err);
+    return json({ error: "Something went wrong. Please try again." }, 500);
   }
 };
 
