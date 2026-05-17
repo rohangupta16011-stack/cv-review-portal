@@ -10,6 +10,7 @@ interface ImportMetaEnv {
   readonly RAZORPAY_KEY_ID?: string;
   readonly RAZORPAY_KEY_SECRET?: string;
   readonly PUBLIC_RAZORPAY_KEY_ID?: string;
+  readonly PUBLIC_GOOGLE_CLIENT_ID?: string;
 }
 
 interface ImportMeta {

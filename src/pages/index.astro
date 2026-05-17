@@ -4,9 +4,21 @@ import { getRemainingForUser } from "../lib/rate-limit";
 
 const user = Astro.locals.user;
 const remaining = user ? await getRemainingForUser(user.id) : null;
+const googleClientId = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
+const showOneTap = !user && !!googleClientId;
 ---
 
 <Layout title="CV Review Portal — Free AI-powered review in seconds">
+  {showOneTap && <script is:inline src="https://accounts.google.com/gsi/client" async defer></script>}
+  {showOneTap && (
+    <div
+      id="g_id_onload"
+      data-client_id={googleClientId}
+      data-callback="handleGoogleCredential"
+      data-auto_prompt="true"
+      data-cancel_on_tap_outside="true"
+    ></div>
+  )}
   <main class="gradient-hero">
     <div class="mx-auto max-w-4xl px-6 py-12 md:py-20">
       <section class="text-center mb-10 md:mb-14">
@@ -99,6 +111,22 @@ const remaining = user ? await getRemainingForUser(user.id) : null;
     </div>
   </main>
 </Layout>
+
+{showOneTap && (
+  <script is:inline>
+    window.handleGoogleCredential = (response) => {
+      if (!response?.credential) return;
+      const fd = new FormData();
+      fd.append("credential", response.credential);
+      fetch("/api/auth/google", { method: "POST", body: fd, redirect: "follow" })
+        .then((r) => {
+          if (r.redirected) window.location.href = r.url;
+          else window.location.reload();
+        })
+        .catch(() => {});
+    };
+  </script>
+)}
 
 <script>
   const form = document.getElementById("cv-form") as HTMLFormElement | null;
