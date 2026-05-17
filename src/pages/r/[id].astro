@@ -1,0 +1,335 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { getReport } from "../../lib/report-store";
+import type { Check, CheckStatus } from "../../lib/checks";
+import { getCheckContent } from "../../lib/check-content";
+
+const { id } = Astro.params;
+const user = Astro.locals.user;
+if (!id) return Astro.redirect("/");
+
+const report = await getReport(id);
+if (!report) return new Response("Not found", { status: 404 });
+
+if (report.userId && (!user || user.id !== report.userId)) {
+  return new Response("Not found", { status: 404 });
+}
+
+const isOwner = !!user && user.id === report.userId;
+
+const STATUS_SCORE: Record<CheckStatus, number> = { pass: 100, warn: 65, fail: 30 };
+
+const categoryMeta: Record<string, { title: string; hex: string }> = {
+  content: { title: "Content", hex: "hex-indigo" },
+  sections: { title: "Sections", hex: "hex-indigo" },
+  ats_essentials: { title: "ATS Essentials", hex: "hex-indigo" },
+};
+
+function group(checks: Check[]) {
+  return {
+    content: checks.filter((c) => c.category === "content"),
+    sections: checks.filter((c) => c.category === "sections"),
+    ats_essentials: checks.filter((c) => c.category === "ats_essentials"),
+  };
+}
+
+function categoryScore(checks: Check[]): number {
+  if (checks.length === 0) return 0;
+  return Math.round(
+    checks.reduce((acc, c) => acc + STATUS_SCORE[c.status], 0) / checks.length,
+  );
+}
+
+function issueCount(checks: Check[]): number {
+  return checks.filter((c) => c.status !== "pass").length;
+}
+
+const grouped = group(report.checks);
+const categories = (["content", "sections", "ats_essentials"] as const).map((key) => ({
+  key,
+  ...categoryMeta[key],
+  checks: grouped[key],
+  score: categoryScore(grouped[key]),
+  issues: issueCount(grouped[key]),
+}));
+
+const totalIssues = report.checks.filter((c) => c.status !== "pass").length;
+
+function scoreTextColor(score: number): string {
+  if (score >= 80) return "text-teal-700";
+  if (score >= 60) return "text-amber-600";
+  return "text-coral-500";
+}
+
+function pillVariant(score: number): string {
+  if (score >= 80) return "sidebar-cat-pill-pass";
+  if (score >= 60) return "sidebar-cat-pill-warn";
+  return "sidebar-cat-pill-fail";
+}
+
+const claimUrl = `/login?claim=${report.id}`;
+const createdAt = new Date(report.createdAt).toLocaleString("en-IN", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
+const STATUS_HEX_CLASS: Record<CheckStatus, string> = {
+  pass: "hex-pass",
+  warn: "hex-warn",
+  fail: "hex-fail",
+};
+
+const STATUS_CALLOUT_BG: Record<CheckStatus, string> = {
+  pass: "bg-teal-50/40 border-teal-600/15",
+  warn: "bg-amber-50/40 border-amber-300/30",
+  fail: "bg-coral-50/40 border-coral-400/25",
+};
+
+function parseDetail(d: string): { wrong: string; right: string } | null {
+  const m = d.match(/^"([^"]+)"\s*→\s*(.+)$/);
+  if (!m) return null;
+  return { wrong: m[1], right: m[2] };
+}
+
+function parseRepetitionDetail(d: string): { word: string; count: string; alts: string[] } | null {
+  const m = d.match(/^"([^"]+)"\s*used\s*(\d+×)\s*—\s*try\s*(.+)$/);
+  if (!m) return null;
+  return { word: m[1], count: m[2], alts: m[3].split(",").map((s) => s.trim()) };
+}
+---
+
+<Layout title={`Review of ${report.filename} — CV Review`}>
+  <main class="bg-cream min-h-screen">
+    {!isOwner && (
+      <div class="border-b border-teal-600/20 bg-teal-50/40">
+        <div class="mx-auto max-w-7xl px-6 py-3 flex items-center justify-between gap-4 text-sm">
+          <p class="text-teal-800">
+            <span class="font-medium">Want to see the specific suggestions?</span>
+            <span class="text-teal-700/80"> Sign in free to unlock the bullets, words, and snippets behind each issue.</span>
+          </p>
+          <a href={claimUrl} class="btn-primary text-xs px-4 py-2 flex-shrink-0">Sign in to unlock</a>
+        </div>
+      </div>
+    )}
+
+    <div class="mx-auto max-w-7xl px-6 py-8 md:py-10">
+      <div class="grid lg:grid-cols-[320px_1fr] gap-8">
+        <!-- SIDEBAR -->
+        <aside class="lg:sticky lg:top-20 lg:self-start">
+          <div class="card p-6">
+            <p class="text-center text-sm font-medium text-ink/60 mb-2">Your Score</p>
+            <p class={`text-center font-display text-5xl font-semibold ${scoreTextColor(report.overallScore)}`}>
+              {report.overallScore}<span class="text-2xl text-ink/40">/100</span>
+            </p>
+            <p class="text-center text-sm text-ink/60 mt-1">{totalIssues} {totalIssues === 1 ? "Issue" : "Issues"}</p>
+
+            <hr class="my-5 border-ink/10" />
+
+            <nav class="space-y-1">
+              {categories.map((cat) => (
+                <a href={`#cat-${cat.key}`} class="flex items-center justify-between px-3 py-3 rounded-lg hover:bg-cream-50 transition group">
+                  <span class="text-sm font-medium tracking-wide text-ink/80 uppercase">{cat.title}</span>
+                  <span class={`sidebar-cat-pill ${pillVariant(cat.score)}`}>{cat.score}%</span>
+                </a>
+              ))}
+              <a href="#cat-tailoring" class="flex items-center justify-between px-3 py-3 rounded-lg hover:bg-cream-50 transition">
+                <span class="text-sm font-medium tracking-wide text-ink/80 uppercase">Tailoring</span>
+                <span class="sidebar-cat-pill sidebar-cat-pill-locked">??%</span>
+              </a>
+            </nav>
+
+            {!isOwner && (
+              <a href={claimUrl} class="mt-5 block w-full text-center bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-full py-3 text-sm transition shadow-sm">
+                Unlock Full Report
+              </a>
+            )}
+          </div>
+        </aside>
+
+        <!-- MAIN -->
+        <div class="space-y-12">
+          <!-- Hero summary -->
+          <section class="card p-6 md:p-8">
+            <p class="text-xs uppercase tracking-wider text-ink/50 mb-2">Your review · {createdAt}</p>
+            <h1 class="font-display text-2xl md:text-3xl font-semibold text-ink mb-3 leading-tight">{report.headline}</h1>
+            <p class="text-ink/70 leading-relaxed">{report.overallSummary}</p>
+            <p class="text-xs text-ink/50 mt-4">{report.filename} · {report.format.toUpperCase()} · {report.wordCount} words</p>
+          </section>
+
+          {categories.map((cat) => (
+            <section id={`cat-${cat.key}`} class="scroll-mt-nav">
+              <header class="flex items-center justify-between mb-5">
+                <div class="flex items-center gap-3">
+                  <span class={`hex ${cat.hex} h-9 w-9 flex items-center justify-center`}>
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+                      {cat.key === "content" && <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />}
+                      {cat.key === "sections" && <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6M9 8h6m-9 8h.008v.008H6V16Zm0-4h.008v.008H6V12Zm0-4h.008v.008H6V8Z" />}
+                      {cat.key === "ats_essentials" && <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />}
+                    </svg>
+                  </span>
+                  <h2 class="font-display text-2xl font-semibold text-ink uppercase tracking-wide">{cat.title}</h2>
+                </div>
+                <span class="section-pill">
+                  {cat.issues === 0 ? "0 issues found" : `${cat.issues} ${cat.issues === 1 ? "issue" : "issues"} found`}
+                </span>
+              </header>
+
+              <div class="space-y-5">
+                {cat.checks.map((c) => {
+                  const content = getCheckContent(c.id);
+                  const isLocked = !isOwner && c.status !== "pass" && (c.details?.length ?? 0) > 0;
+                  const headline = c.status === "pass" ? content.goodHeadline : content.badHeadline;
+                  const detailCount = c.details?.length ?? 0;
+                  const showProgressBar = c.id === "ats_parse_rate" && typeof c.meta?.score === "number";
+                  const progress = showProgressBar ? (c.meta!.score as number) : 0;
+                  const repetitionDetails = c.id === "repetition" ? (c.details ?? []).map(parseRepetitionDetail) : [];
+                  const spellingDetails = c.id === "spelling_grammar" ? (c.details ?? []).map(parseDetail) : [];
+
+                  return (
+                    <article class="card p-6 md:p-8">
+                      <!-- Check header -->
+                      <div class="flex items-start justify-between gap-4 mb-4">
+                        <div class="flex items-center gap-3">
+                          <span class={`hex h-7 w-7 ${STATUS_HEX_CLASS[c.status]} flex items-center justify-center`}>
+                            <svg class="h-3 w-3" fill="currentColor" viewBox="0 0 24 24"><path d="M16.5 6h-9c-1.66 0-3 1.34-3 3v8.5l3-3h9c1.66 0 3-1.34 3-3V9c0-1.66-1.34-3-3-3z"/></svg>
+                          </span>
+                          <h3 class="font-display text-lg font-semibold text-ink uppercase tracking-wide">{c.title}</h3>
+                        </div>
+                        <span class="text-ink/30 flex-shrink-0 mt-1">
+                          <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5" /></svg>
+                        </span>
+                      </div>
+
+                      <!-- Description -->
+                      <p class="text-sm text-ink/70 leading-relaxed mb-4">{content.description}</p>
+
+                      <!-- Progress bar (ATS parse rate only) -->
+                      {showProgressBar && (
+                        <div class="mb-4">
+                          <div class="score-bar bg-cream-200">
+                            <div class="score-bar-fill" style={`width: ${progress}%; background: ${progress >= 80 ? "#0D9488" : progress >= 60 ? "#E89B3C" : "#FB7185"};`}></div>
+                          </div>
+                        </div>
+                      )}
+
+                      <!-- Status callout -->
+                      <div class={`rounded-2xl border p-6 ${STATUS_CALLOUT_BG[c.status]}`}>
+                        <div class="flex flex-col items-center text-center">
+                          <div class="relative mb-3">
+                            <span class={`hex ${STATUS_HEX_CLASS[c.status]} h-16 w-16 flex items-center justify-center font-display text-xl font-semibold`}>
+                              {c.status === "pass" ? (
+                                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+                              ) : (
+                                <span>{detailCount || (c.status === "fail" ? "!" : "•")}</span>
+                              )}
+                            </span>
+                          </div>
+                          <h4 class="font-display text-xl font-semibold text-ink mb-2">{headline}</h4>
+                          <p class="text-sm text-ink/70 max-w-lg">{c.summary}</p>
+                        </div>
+
+                        {/* Findings */}
+                        {c.details && c.details.length > 0 && (
+                          <div class="mt-5">
+                            <div class="relative">
+                              {c.id === "repetition" ? (
+                                <ul class={`space-y-2 ${isLocked ? "blurred" : ""}`}>
+                                  {repetitionDetails.map((d) => (
+                                    d ? (
+                                      <li class="flex flex-wrap items-center gap-2 bg-white/70 border border-amber-300/20 rounded-lg px-3 py-2">
+                                        <span class="text-sm font-medium text-amber-800">{d.count}</span>
+                                        <span class="text-sm text-amber-900">{d.word}</span>
+                                        <span class="text-xs text-ink/50 mx-1">try replacing with</span>
+                                        {d.alts.map((alt) => (
+                                          <span class="chip-suggest">{alt}</span>
+                                        ))}
+                                      </li>
+                                    ) : null
+                                  ))}
+                                </ul>
+                              ) : c.id === "spelling_grammar" ? (
+                                <ul class={`flex flex-wrap gap-2 ${isLocked ? "blurred" : ""}`}>
+                                  {spellingDetails.map((d) => (
+                                    d ? (
+                                      <li class="chip-fail">
+                                        <svg class="h-4 w-4 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                                        <span><span class="line-through">{d.wrong}</span> → <span class="font-medium">{d.right}</span></span>
+                                      </li>
+                                    ) : null
+                                  ))}
+                                </ul>
+                              ) : c.id === "essential_sections" || c.id === "contact_info" ? (
+                                <ul class={`space-y-2 ${isLocked ? "blurred" : ""}`}>
+                                  {c.details.map((d) => (
+                                    <li class="flex items-center gap-2 bg-white/70 border border-teal-600/15 rounded-lg px-3 py-2 text-sm text-ink/80">
+                                      <svg class="h-4 w-4 text-teal-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+                                      <span>{d}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <ul class={`space-y-2 ${isLocked ? "blurred" : ""}`}>
+                                  {c.details.map((d) => (
+                                    <li class="chip-fail">
+                                      <svg class="h-4 w-4 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                                      <span>{d}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                              {isLocked && (
+                                <div class="absolute inset-0 flex items-center justify-center">
+                                  <a href={claimUrl} class="btn-primary text-xs px-5 py-2.5 shadow-lg">
+                                    <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 0 0-9 0v3.75m-1.5 0h12a1.5 1.5 0 0 1 1.5 1.5v7.5a1.5 1.5 0 0 1-1.5 1.5h-12a1.5 1.5 0 0 1-1.5-1.5v-7.5a1.5 1.5 0 0 1 1.5-1.5Z" /></svg>
+                                    Sign in to view {detailCount} {detailCount === 1 ? "suggestion" : "suggestions"}
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* CTA panel for warn/fail */}
+                      {c.status !== "pass" && (
+                        <div class="mt-5 rounded-xl border border-ink/10 bg-cream-50/60 px-5 py-4 flex items-center justify-between gap-4">
+                          <div>
+                            <p class="font-medium text-ink text-sm">{content.ctaTitle}</p>
+                            <p class="text-xs text-ink/60 mt-0.5">{content.ctaBlurb}</p>
+                          </div>
+                          <span class="text-xs px-3 py-1.5 rounded-full bg-ink/5 text-ink/60 flex-shrink-0">Soon</span>
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+
+          <!-- Tailoring locked -->
+          <section id="cat-tailoring" class="scroll-mt-nav">
+            <header class="flex items-center justify-between mb-5">
+              <div class="flex items-center gap-3">
+                <span class="hex hex-indigo h-9 w-9 flex items-center justify-center">
+                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 0 0-9 0v3.75m-1.5 0h12a1.5 1.5 0 0 1 1.5 1.5v7.5a1.5 1.5 0 0 1-1.5 1.5h-12a1.5 1.5 0 0 1-1.5-1.5v-7.5a1.5 1.5 0 0 1 1.5-1.5Z" /></svg>
+                </span>
+                <h2 class="font-display text-2xl font-semibold text-ink uppercase tracking-wide">Resume Tailoring</h2>
+              </div>
+              <span class="section-pill">Coming soon</span>
+            </header>
+            <div class="card p-8 border-dashed">
+              <p class="text-ink/70 mb-2"><span class="font-medium text-ink">Paste the job you're applying for</span> and our checker will give you job-specific resume tailoring suggestions.</p>
+              <p class="text-sm text-ink/60">Match score, missing keywords, and tailored bullet rewrites — coming in the next release.</p>
+            </div>
+          </section>
+
+          <div class="text-center pt-2 pb-6 space-y-2">
+            <a href="/" class="btn-ghost">Review another CV</a>
+            <p class="text-xs text-ink/50">Your CV is auto-deleted from our storage after 7 days.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</Layout>

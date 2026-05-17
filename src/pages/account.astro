@@ -1,0 +1,77 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { listUserReports } from "../lib/report-store";
+import { getRemainingForUser } from "../lib/rate-limit";
+
+const user = Astro.locals.user;
+if (!user) {
+  return Astro.redirect("/login");
+}
+
+const [reports, remaining] = await Promise.all([
+  listUserReports(user.id, 20),
+  getRemainingForUser(user.id),
+]);
+
+function formatDate(ms: number) {
+  return new Date(ms).toLocaleString("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+function scoreColor(score: number): string {
+  if (score >= 80) return "text-teal-700";
+  if (score >= 60) return "text-amber-700";
+  return "text-coral-500";
+}
+---
+
+<Layout title="Your account — CV Review">
+  <main class="gradient-hero">
+    <div class="mx-auto max-w-3xl px-6 py-10 md:py-14">
+      <header class="mb-8">
+        <h1 class="font-display text-3xl font-semibold text-ink mb-2">Your account</h1>
+        <p class="text-ink/60 text-sm">{user.email}</p>
+      </header>
+
+      <section class="card p-6 mb-8">
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <p class="text-xs uppercase tracking-wider text-ink/50 mb-1">Free reviews today</p>
+            <p class="font-display text-2xl font-semibold text-ink">{remaining} remaining</p>
+            <p class="text-sm text-ink/60 mt-1">Resets every 24 hours.</p>
+          </div>
+          <a href="/" class="btn-primary">{remaining > 0 ? "New review" : "Out for today"}</a>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="font-display text-lg font-semibold text-ink mb-4">Past reviews</h2>
+        {reports.length === 0 ? (
+          <div class="card p-8 text-center text-ink/60 text-sm">
+            You haven't reviewed any CVs yet. <a href="/" class="text-teal-600 hover:text-teal-700">Start one</a>.
+          </div>
+        ) : (
+          <ul class="space-y-3">
+            {reports.map((r) => (
+              <li>
+                <a href={`/r/${r.id}`} class="card p-5 flex items-center justify-between gap-4 hover:border-teal-600/30 transition">
+                  <div class="min-w-0">
+                    <p class="font-medium text-ink truncate">{r.headline}</p>
+                    <p class="text-xs text-ink/50 mt-1">{r.filename} · {formatDate(r.createdAt)}</p>
+                  </div>
+                  <div class="text-right flex-shrink-0">
+                    <p class={`font-display text-2xl font-semibold ${scoreColor(r.overallScore)}`}>{r.overallScore}</p>
+                    <p class="text-xs text-ink/50">/ 100</p>
+                  </div>
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p class="text-xs text-ink/50 mt-4">Reports are kept for 7 days, then automatically deleted.</p>
+      </section>
+    </div>
+  </main>
+</Layout>

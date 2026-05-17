@@ -3,6 +3,7 @@ interface Props {
   title?: string;
 }
 const { title = "CV Review Portal" } = Astro.props;
+const user = Astro.locals.user;
 ---
 
 <!doctype html>
@@ -18,9 +19,28 @@ const { title = "CV Review Portal" } = Astro.props;
       rel="stylesheet"
     />
     <title>{title}</title>
-    <script src="https://checkout.razorpay.com/v1/checkout.js" is:inline></script>
   </head>
   <body class="min-h-screen bg-cream">
+    <header class="border-b border-ink/5 bg-white/70 backdrop-blur sticky top-0 z-10">
+      <div class="mx-auto max-w-5xl px-6 py-3.5 flex items-center justify-between">
+        <a href="/" class="flex items-center gap-2 group">
+          <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-teal-600 text-white font-display font-semibold transition group-hover:scale-105">cv</span>
+          <span class="font-display text-lg font-semibold text-ink">Review</span>
+        </a>
+        <nav class="flex items-center gap-2 text-sm">
+          {user ? (
+            <>
+              <a href="/account" class="text-ink/70 hover:text-ink hidden sm:inline px-2 py-1 rounded-lg hover:bg-cream-50">{user.email}</a>
+              <form method="POST" action="/auth/logout" class="contents">
+                <button type="submit" class="text-ink/60 hover:text-ink px-2 py-1 rounded-lg hover:bg-cream-50">Sign out</button>
+              </form>
+            </>
+          ) : (
+            <a href="/login" class="btn-primary text-xs px-4 py-2">Sign in</a>
+          )}
+        </nav>
+      </div>
+    </header>
     <slot />
   </body>
 </html>
