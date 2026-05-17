@@ -18,6 +18,8 @@ export default {
           50: "#FFF1F2",
           400: "#FB7185",
           500: "#F43F5E",
+          600: "#E11D48",
+          700: "#BE123C",
         },
         cream: {
           DEFAULT: "#FFFBF5",
